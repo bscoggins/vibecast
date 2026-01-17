@@ -53,11 +53,34 @@ A beautiful terminal-based internet radio streaming application for [SomaFM](htt
 
 ## Installation
 
+### Pre-built Binaries
+
+Download the latest release from the [Releases page](https://github.com/bscoggins/vibecast/releases):
+
+| Platform | File |
+|----------|------|
+| macOS Apple Silicon (M1/M2/M3) | `vibecast-macos-aarch64.tar.gz` |
+| macOS Intel | `vibecast-macos-x86_64.tar.gz` |
+| Linux x86_64 | `vibecast-linux-x86_64.tar.gz` |
+| Linux ARM64 | `vibecast-linux-aarch64.tar.gz` |
+
+```bash
+# Download and extract (example for macOS Apple Silicon)
+tar -xzf vibecast-macos-aarch64.tar.gz
+
+# Make executable and move to PATH
+chmod +x vibecast-macos-aarch64
+sudo mv vibecast-macos-aarch64 /usr/local/bin/vibecast
+
+# Run
+vibecast
+```
+
 ### From Source
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/vibecast.git
+git clone https://github.com/bscoggins/vibecast.git
 cd vibecast
 
 # Build release version
@@ -237,9 +260,13 @@ Vibecast uses the SomaFM public API:
 ### mpv Integration
 
 Audio playback is handled by mpv via JSON IPC over a Unix socket:
-- Socket path: `/tmp/vibecast_mpv.sock`
+- Socket path: `/tmp/vibecast_mpv_{pid}.sock` (unique per process to allow multiple instances)
 - Commands sent: `loadfile`, `set_property` (volume, pause), `get_property`
 - Audio stats (RMS/peak levels) are retrieved for visualization
+
+### Platform Support
+
+Vibecast currently supports **macOS** and **Linux** only. Windows is not supported due to the use of Unix sockets for mpv IPC communication.
 
 ### Image Protocol Support
 
@@ -283,3 +310,32 @@ Contributions are welcome! Please feel free to submit issues and pull requests.
 3. Commit your changes (`git commit -m 'Add amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
+
+## Releasing
+
+Releases are automated via GitHub Actions. To create a new release:
+
+1. Update the version in `Cargo.toml`:
+   ```toml
+   [package]
+   version = "0.2.0"  # Bump version number
+   ```
+
+2. Commit the version change:
+   ```bash
+   git add Cargo.toml Cargo.lock
+   git commit -m "Bump version to 0.2.0"
+   git push origin main
+   ```
+
+3. Create and push a version tag:
+   ```bash
+   git tag -a v0.2.0 -m "Release v0.2.0"
+   git push origin v0.2.0
+   ```
+
+The release workflow will automatically:
+- Build binaries for all supported platforms (Linux x86_64/aarch64, macOS x86_64/aarch64)
+- Create a GitHub release with the tag name
+- Upload compressed binaries as release assets
+- Generate release notes with installation instructions
