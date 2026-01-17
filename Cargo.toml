@@ -41,6 +41,7 @@ thiserror = "2.0"
 
 # Color support
 colorsys = "0.6"
+unicode-width = "0.1"
 
 [profile.release]
 lto = true

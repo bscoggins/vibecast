@@ -6,6 +6,7 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph, Widget},
 };
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::api::Song;
 use super::theme::Theme;
@@ -13,6 +14,39 @@ use super::theme::Theme;
 pub struct SongHistory<'a> {
     songs: &'a [Song],
     theme: &'a Theme,
+}
+
+fn truncate_to_width(text: &str, max_width: usize) -> String {
+    if max_width == 0 {
+        return String::new();
+    }
+
+    if UnicodeWidthStr::width(text) <= max_width {
+        return text.to_string();
+    }
+
+    let ellipsis = "...";
+    let ellipsis_width = UnicodeWidthStr::width(ellipsis);
+
+    if max_width <= ellipsis_width {
+        return ellipsis.chars().take(max_width).collect();
+    }
+
+    let target_width = max_width.saturating_sub(ellipsis_width);
+    let mut width = 0;
+    let mut out = String::new();
+
+    for ch in text.chars() {
+        let ch_width = UnicodeWidthChar::width(ch).unwrap_or(0);
+        if width + ch_width > target_width {
+            break;
+        }
+        width += ch_width;
+        out.push(ch);
+    }
+
+    out.push_str(ellipsis);
+    out
 }
 
 impl<'a> SongHistory<'a> {
@@ -57,12 +91,8 @@ impl<'a> Widget for SongHistory<'a> {
             };
 
             // Truncate if too long
-            let max_len = inner.width.saturating_sub(4) as usize;
-            let truncated = if display.len() > max_len {
-                format!("{}...", &display[..max_len.saturating_sub(3)])
-            } else {
-                display
-            };
+            let max_width = inner.width.saturating_sub(4) as usize;
+            let truncated = truncate_to_width(&display, max_width);
 
             // First song slightly highlighted, rest muted
             let style = if i == 0 {

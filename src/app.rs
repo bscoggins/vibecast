@@ -1,10 +1,11 @@
 use anyhow::Result;
 use ratatui::widgets::ListState;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use crate::api::{AudioQuality, Channel, Song, SomaFmClient};
-use crate::artwork::ImageCache;
 use crate::input::Action;
-use crate::player::MpvController;
+use crate::player::{MpvController, PlaybackState};
 use crate::storage::{ConfigStore, FavoritesStore};
 use crate::ui::{ArtworkState, Theme, ThemeType, VisualizationMode};
 use crate::visualizer::{SpectrumAnalyzer, SpectrumData};
@@ -42,15 +43,16 @@ pub struct App {
     pub show_artwork: bool,
     pub show_history: bool,
     pub audio_quality: AudioQuality,
-    pub player: MpvController,
+    pub player: Arc<Mutex<MpvController>>,
+    pub playback_state: PlaybackState,
     pub api_client: SomaFmClient,
     pub should_quit: bool,
     pub last_volume: u8,
     pub is_muted: bool,
     pub artwork_state: ArtworkState,
-    pub image_cache: ImageCache,
     pub spectrum_analyzer: SpectrumAnalyzer,
     pub spectrum_data: SpectrumData,
+    pub audio_levels: Option<(f32, f32)>,
     pub visualization_mode: VisualizationMode,
     pub frame: u64,
     pub theme_type: ThemeType,
@@ -80,15 +82,16 @@ impl App {
             show_artwork: true,
             show_history: true,
             audio_quality: AudioQuality::default(),
-            player: MpvController::new(),
+            player: Arc::new(Mutex::new(MpvController::new())),
+            playback_state: PlaybackState::default(),
             api_client: SomaFmClient::new(),
             should_quit: false,
             last_volume: 80,
             is_muted: false,
             artwork_state: ArtworkState::new(),
-            image_cache: ImageCache::default(),
             spectrum_analyzer: SpectrumAnalyzer::new(),
             spectrum_data: SpectrumData::default(),
+            audio_levels: None,
             visualization_mode,
             frame: 0,
             theme_type,
@@ -169,41 +172,19 @@ impl App {
         self.current_channel.map(|i| &self.channels[i])
     }
 
-    async fn load_artwork(&mut self, channel: &Channel) {
-        // Prefer xlimage (extra large) for best quality, fall back to largeimage
-        let image_url = channel.xlimage.as_ref().unwrap_or(&channel.largeimage);
-
-        // Check if we already have this image loaded
-        if self.artwork_state.current_url() == Some(image_url) {
-            return;
-        }
-
-        // Try to load from cache or fetch
-        match self.image_cache.get_or_fetch(image_url, &channel.id).await {
-            Ok(bytes) => {
-                if let Ok(img) = image::load_from_memory(&bytes) {
-                    self.artwork_state.set_image(img, image_url);
-                }
-            }
-            Err(_) => {
-                // Failed to load, clear artwork
-                self.artwork_state.clear();
-            }
-        }
-    }
-
     async fn play_current_station(&mut self) -> Result<()> {
         if let Some(channel) = self.selected_channel().cloned() {
             let url = channel.stream_url(self.audio_quality);
             let idx = self.selected_channel_index();
-            self.player.play(&url).await?;
+            let mut player = self.player.lock().await;
+            player.play(&url).await?;
+            self.playback_state = player.state.clone();
             self.current_channel = idx;
             self.stream_title = None;
             self.current_song = None;
             self.song_history.clear();
-            if self.show_artwork {
-                self.load_artwork(&channel).await;
-            }
+            self.artwork_state.clear();
+            self.audio_levels = None;
         }
         Ok(())
     }
@@ -212,11 +193,16 @@ impl App {
         match action {
             Action::Quit => {
                 self.should_quit = true;
-                self.player.stop().await?;
+                let mut player = self.player.lock().await;
+                player.stop().await?;
+                self.playback_state = player.state.clone();
+                self.audio_levels = None;
             }
             Action::TogglePlayPause => {
-                if self.player.state.playing {
-                    self.player.toggle_pause().await?;
+                if self.playback_state.playing {
+                    let mut player = self.player.lock().await;
+                    player.toggle_pause().await?;
+                    self.playback_state = player.state.clone();
                 } else {
                     self.play_current_station().await?;
                 }
@@ -227,25 +213,32 @@ impl App {
             Action::VolumeUp => {
                 if self.is_muted {
                     self.is_muted = false;
-                    self.player.set_volume(self.last_volume).await?;
+                    let mut player = self.player.lock().await;
+                    player.set_volume(self.last_volume).await?;
+                    self.playback_state = player.state.clone();
                 } else {
-                    self.player.volume_up().await?;
+                    let mut player = self.player.lock().await;
+                    player.volume_up().await?;
+                    self.playback_state = player.state.clone();
                 }
             }
             Action::VolumeDown => {
-                self.player.volume_down().await?;
-                if self.player.state.volume == 0 {
-                    self.is_muted = true;
-                }
+                let mut player = self.player.lock().await;
+                player.volume_down().await?;
+                self.playback_state = player.state.clone();
             }
             Action::ToggleMute => {
                 if self.is_muted {
                     self.is_muted = false;
-                    self.player.set_volume(self.last_volume).await?;
+                    let mut player = self.player.lock().await;
+                    player.set_volume(self.last_volume).await?;
+                    self.playback_state = player.state.clone();
                 } else {
-                    self.last_volume = self.player.state.volume;
+                    self.last_volume = self.playback_state.volume;
                     self.is_muted = true;
-                    self.player.set_volume(0).await?;
+                    let mut player = self.player.lock().await;
+                    player.set_volume(0).await?;
+                    self.playback_state = player.state.clone();
                 }
             }
             Action::ToggleFavorite => {
@@ -295,10 +288,8 @@ impl App {
             }
             Action::ToggleArtwork => {
                 self.show_artwork = !self.show_artwork;
-                if self.show_artwork {
-                    if let Some(channel) = self.current_channel().cloned() {
-                        self.load_artwork(&channel).await;
-                    }
+                if !self.show_artwork {
+                    self.artwork_state.clear();
                 }
             }
             Action::ToggleHistory => {
@@ -309,10 +300,13 @@ impl App {
                 if new_quality != self.audio_quality {
                     self.audio_quality = new_quality;
                     // If playing, restart with new quality
-                    if self.player.state.playing {
+                    if self.playback_state.playing {
                         if let Some(channel) = self.current_channel().cloned() {
                             let url = channel.stream_url(self.audio_quality);
-                            self.player.play(&url).await?;
+                            let mut player = self.player.lock().await;
+                            player.play(&url).await?;
+                            self.playback_state = player.state.clone();
+                            self.audio_levels = None;
                         }
                     }
                 }
@@ -322,10 +316,13 @@ impl App {
                 if new_quality != self.audio_quality {
                     self.audio_quality = new_quality;
                     // If playing, restart with new quality
-                    if self.player.state.playing {
+                    if self.playback_state.playing {
                         if let Some(channel) = self.current_channel().cloned() {
                             let url = channel.stream_url(self.audio_quality);
-                            self.player.play(&url).await?;
+                            let mut player = self.player.lock().await;
+                            player.play(&url).await?;
+                            self.playback_state = player.state.clone();
+                            self.audio_levels = None;
                         }
                     }
                 }
@@ -354,14 +351,21 @@ impl App {
         // Increment frame counter for animations
         self.frame = self.frame.wrapping_add(1);
 
-        // Try to get real audio stats from mpv
-        if let Some((rms_db, peak_db)) = self.player.get_audio_stats().await {
-            self.spectrum_analyzer.update_from_levels(rms_db, peak_db).await;
+        // Use cached audio stats from the background worker when available
+        if let Some((rms_db, peak_db)) = self.audio_levels {
+            if self.playback_state.playing && !self.playback_state.paused {
+                self.spectrum_analyzer.update_from_levels(rms_db, peak_db).await;
+            } else {
+                self.spectrum_analyzer.animate(
+                    self.playback_state.playing,
+                    self.playback_state.paused,
+                ).await;
+            }
         } else {
             // Fall back to animated visualization
             self.spectrum_analyzer.animate(
-                self.player.state.playing,
-                self.player.state.paused,
+                self.playback_state.playing,
+                self.playback_state.paused,
             ).await;
         }
 
@@ -369,38 +373,6 @@ impl App {
         self.spectrum_data = self.spectrum_analyzer.get_data().await;
     }
 
-    pub async fn update_metadata(&mut self) -> Result<()> {
-        if let Some(channel) = self.current_channel().cloned() {
-            // Try to get song info from API (includes history)
-            if let Ok(songs) = self.api_client.get_songs(&channel.id).await {
-                if !songs.is_empty() {
-                    self.current_song = Some(songs[0].clone());
-                    // Store up to 5 previous songs
-                    self.song_history = songs.into_iter().skip(1).take(5).collect();
-                }
-            }
-
-            // Load artwork if enabled and not already loaded
-            if self.show_artwork && !self.artwork_state.has_image() {
-                self.load_artwork(&channel).await;
-            }
-        }
-
-        // Also try to get metadata from stream
-        if self.player.state.playing {
-            if let Ok(Some((artist, title))) = self.player.get_metadata().await {
-                if !title.is_empty() {
-                    self.stream_title = Some(if artist.is_empty() {
-                        title
-                    } else {
-                        format!("{} - {}", artist, title)
-                    });
-                }
-            }
-        }
-
-        Ok(())
-    }
 }
 
 impl Default for App {

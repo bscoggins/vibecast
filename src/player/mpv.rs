@@ -108,11 +108,21 @@ impl MpvController {
         }
 
         if !self.socket_path.exists() {
+            if let Some(mut child) = self.child.take() {
+                let _ = child.kill().await;
+                let _ = child.wait().await;
+            }
             return Err(anyhow!("mpv socket not created"));
         }
 
         // Connect to socket
-        let stream = UnixStream::connect(&self.socket_path).await?;
+        let stream = match UnixStream::connect(&self.socket_path).await {
+            Ok(stream) => stream,
+            Err(err) => {
+                self.stop().await?;
+                return Err(err.into());
+            }
+        };
         let (read_half, write_half) = stream.into_split();
         self.reader = Some(BufReader::new(read_half));
         self.writer = Some(BufWriter::new(write_half));
@@ -143,6 +153,14 @@ impl MpvController {
     }
 
     async fn send_command(&mut self, command: Vec<Value>) -> Result<Value> {
+        self.send_command_with_timeout(command, Duration::from_secs(2)).await
+    }
+
+    async fn send_command_with_timeout(
+        &mut self,
+        command: Vec<Value>,
+        read_timeout: Duration,
+    ) -> Result<Value> {
         let writer = self.writer.as_mut().ok_or_else(|| anyhow!("Not connected to mpv"))?;
         let reader = self.reader.as_mut().ok_or_else(|| anyhow!("Not connected to mpv"))?;
 
@@ -159,8 +177,6 @@ impl MpvController {
         writer.flush().await?;
 
         // Read responses, skipping events until we get our response
-        let read_timeout = Duration::from_secs(2);
-
         loop {
             let mut line = String::new();
 
@@ -310,6 +326,8 @@ impl MpvController {
             return None;
         }
 
+        let read_timeout = Duration::from_millis(200);
+
         // Try multiple approaches to get audio level data
 
         // Method 1: Try astats filter metadata with different property paths
@@ -319,11 +337,20 @@ impl MpvController {
         ];
 
         for path in rms_paths {
-            if let Ok(Value::String(s)) = self.send_command(vec![json!("get_property"), json!(path)]).await {
+            if let Ok(Value::String(s)) = self
+                .send_command_with_timeout(vec![json!("get_property"), json!(path)], read_timeout)
+                .await
+            {
                 if let Ok(rms) = s.parse::<f32>() {
                     // Got RMS, try to get peak
                     let peak_path = path.replace("RMS_level", "Peak_level");
-                    let peak = if let Ok(Value::String(ps)) = self.send_command(vec![json!("get_property"), json!(peak_path)]).await {
+                    let peak = if let Ok(Value::String(ps)) = self
+                        .send_command_with_timeout(
+                            vec![json!("get_property"), json!(peak_path)],
+                            read_timeout,
+                        )
+                        .await
+                    {
                         ps.parse::<f32>().unwrap_or(rms + 3.0)
                     } else {
                         rms + 3.0 // Estimate peak as 3dB above RMS
@@ -335,7 +362,13 @@ impl MpvController {
 
         // Method 2: Use playback-time changes as a proxy for activity
         // This creates variation based on playback progress
-        if let Ok(Value::Number(time)) = self.send_command(vec![json!("get_property"), json!("playback-time")]).await {
+        if let Ok(Value::Number(time)) = self
+            .send_command_with_timeout(
+                vec![json!("get_property"), json!("playback-time")],
+                read_timeout,
+            )
+            .await
+        {
             if let Some(t) = time.as_f64() {
                 // Use time to create pseudo-random but consistent audio levels
                 // This provides variation that looks like audio response

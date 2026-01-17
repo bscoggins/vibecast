@@ -19,11 +19,167 @@ use ratatui::{
     Terminal,
 };
 use std::io;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
+use tokio::sync::{mpsc, watch, Mutex};
+use tokio::time;
 
+use image::DynamicImage;
+use api::{SomaFmClient, Song};
 use app::App;
+use artwork::ImageCache;
 use input::handle_key;
+use player::MpvController;
 use ui::{Header, HelpOverlay, NowPlaying, SongHistory, StationList, StatusBar, Visualizer, init_picker};
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct MetadataRequest {
+    channel_id: Option<String>,
+    image_url: Option<String>,
+    show_artwork: bool,
+}
+
+enum AppUpdate {
+    Songs {
+        channel_id: String,
+        current_song: Option<Song>,
+        history: Vec<Song>,
+    },
+    StreamTitle {
+        channel_id: Option<String>,
+        title: Option<String>,
+    },
+    Artwork {
+        channel_id: String,
+        image: DynamicImage,
+        url: String,
+    },
+}
+
+fn build_metadata_request(app: &App) -> MetadataRequest {
+    let (channel_id, image_url) = match app.current_channel() {
+        Some(channel) => {
+            let image_url = channel
+                .xlimage
+                .as_ref()
+                .unwrap_or(&channel.largeimage)
+                .to_string();
+            (Some(channel.id.clone()), Some(image_url))
+        }
+        None => (None, None),
+    };
+
+    MetadataRequest {
+        channel_id,
+        image_url,
+        show_artwork: app.show_artwork,
+    }
+}
+
+async fn metadata_worker(
+    mut req_rx: watch::Receiver<MetadataRequest>,
+    player: Arc<Mutex<MpvController>>,
+    update_tx: mpsc::UnboundedSender<AppUpdate>,
+) {
+    let api_client = SomaFmClient::new();
+    let image_cache = ImageCache::default();
+    let mut interval = time::interval(Duration::from_secs(10));
+    let mut last_artwork_url: Option<String> = None;
+
+    loop {
+        tokio::select! {
+            _ = interval.tick() => {}
+            changed = req_rx.changed() => {
+                if changed.is_err() {
+                    break;
+                }
+            }
+        }
+
+        let req = req_rx.borrow().clone();
+        let Some(channel_id) = req.channel_id.clone() else {
+            last_artwork_url = None;
+            continue;
+        };
+
+        if let Ok(Ok(songs)) = time::timeout(Duration::from_secs(5), api_client.get_songs(&channel_id)).await {
+            let current_song = songs.first().cloned();
+            let history = songs.into_iter().skip(1).take(5).collect();
+            let _ = update_tx.send(AppUpdate::Songs {
+                channel_id: channel_id.clone(),
+                current_song,
+                history,
+            });
+        }
+
+        if req.show_artwork {
+            if let Some(image_url) = req.image_url.clone() {
+                if last_artwork_url.as_deref() != Some(image_url.as_str()) {
+                    last_artwork_url = Some(image_url.clone());
+                    if let Ok(Ok(bytes)) = time::timeout(
+                        Duration::from_secs(5),
+                        image_cache.get_or_fetch(&image_url, &channel_id),
+                    )
+                    .await
+                    {
+                        if let Ok(img) = image::load_from_memory(&bytes) {
+                            let _ = update_tx.send(AppUpdate::Artwork {
+                                channel_id: channel_id.clone(),
+                                image: img,
+                                url: image_url,
+                            });
+                        }
+                    }
+                }
+            }
+        } else {
+            last_artwork_url = None;
+        }
+
+        if let Ok(mut locked) = player.try_lock() {
+            if locked.state.playing {
+                if let Ok(Ok(Some((artist, title)))) =
+                    time::timeout(Duration::from_millis(500), locked.get_metadata()).await
+                {
+                    if !title.is_empty() {
+                        let stream_title = if artist.is_empty() {
+                            title
+                        } else {
+                            format!("{} - {}", artist, title)
+                        };
+                        let _ = update_tx.send(AppUpdate::StreamTitle {
+                            channel_id: Some(channel_id.clone()),
+                            title: Some(stream_title),
+                        });
+                    }
+                }
+            }
+        }
+    }
+}
+
+async fn audio_worker(
+    player: Arc<Mutex<MpvController>>,
+    audio_tx: watch::Sender<Option<(f32, f32)>>,
+) {
+    let mut interval = time::interval(Duration::from_millis(50));
+
+    loop {
+        interval.tick().await;
+
+        let mut locked = match player.try_lock() {
+            Ok(locked) => locked,
+            Err(_) => continue,
+        };
+
+        if !locked.state.playing || locked.state.paused {
+            let _ = audio_tx.send(None);
+            continue;
+        }
+
+        let _ = audio_tx.send(locked.get_audio_stats().await);
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -64,12 +220,58 @@ async fn run_app<B: ratatui::backend::Backend>(
     // Initialize app
     app.init().await?;
 
+    let initial_request = build_metadata_request(app);
+    let (metadata_tx, metadata_rx) = watch::channel(initial_request.clone());
+    let (update_tx, mut update_rx) = mpsc::unbounded_channel();
+    let (audio_tx, mut audio_rx) = watch::channel::<Option<(f32, f32)>>(None);
+
+    tokio::spawn(metadata_worker(metadata_rx, app.player.clone(), update_tx));
+    tokio::spawn(audio_worker(app.player.clone(), audio_tx));
+
     let tick_rate = Duration::from_millis(16); // ~60fps for smooth visualizer
-    let metadata_interval = Duration::from_secs(10);
     let mut last_tick = Instant::now();
-    let mut last_metadata = Instant::now();
+    let mut last_request = initial_request;
 
     loop {
+        while let Ok(update) = update_rx.try_recv() {
+            match update {
+                AppUpdate::Songs {
+                    channel_id,
+                    current_song,
+                    history,
+                } => {
+                    if app.current_channel().map(|c| c.id.as_str()) == Some(channel_id.as_str()) {
+                        app.current_song = current_song;
+                        app.song_history = history;
+                    }
+                }
+                AppUpdate::StreamTitle { channel_id, title } => {
+                    if channel_id.as_deref() == app.current_channel().map(|c| c.id.as_str()) {
+                        if let Some(title) = title {
+                            app.stream_title = Some(title);
+                        }
+                    }
+                }
+                AppUpdate::Artwork {
+                    channel_id,
+                    image,
+                    url,
+                } => {
+                    if app.show_artwork
+                        && app.current_channel().map(|c| c.id.as_str()) == Some(channel_id.as_str())
+                    {
+                        app.artwork_state.set_image(image, &url);
+                    }
+                }
+            }
+        }
+
+        if audio_rx.has_changed().unwrap_or(false) {
+            app.audio_levels = *audio_rx.borrow_and_update();
+        }
+
+        let mut list_state = app.list_state.clone();
+
         // Draw UI
         terminal.draw(|f| {
             let area = f.area();
@@ -105,7 +307,6 @@ async fn run_app<B: ratatui::backend::Backend>(
                 true,
                 theme,
             );
-            let mut list_state = app.list_state.clone();
             f.render_stateful_widget(station_list, content_chunks[0], &mut list_state);
 
             // Right panel - split vertically for now playing, history, and visualizer
@@ -121,7 +322,7 @@ async fn run_app<B: ratatui::backend::Backend>(
             let current_channel = app.current_channel().cloned();
             let current_song = app.current_song.clone();
             let stream_title = app.stream_title.clone();
-            let is_paused = app.player.state.paused;
+            let is_paused = app.playback_state.paused;
 
             let now_playing = NowPlaying::new(
                 current_channel.as_ref(),
@@ -148,8 +349,8 @@ async fn run_app<B: ratatui::backend::Backend>(
             if app.show_visualizer {
                 let visualizer = Visualizer::new(
                     &app.spectrum_data,
-                    app.player.state.playing,
-                    app.player.state.paused,
+                    app.playback_state.playing,
+                    app.playback_state.paused,
                     app.visualization_mode,
                     app.frame,
                     theme,
@@ -159,9 +360,9 @@ async fn run_app<B: ratatui::backend::Backend>(
 
             // Status bar
             let status_bar = StatusBar::new(
-                app.player.state.playing,
-                app.player.state.paused,
-                if app.is_muted { 0 } else { app.player.state.volume },
+                app.playback_state.playing,
+                app.playback_state.paused,
+                if app.is_muted { 0 } else { app.playback_state.volume },
                 app.theme.name,
                 theme,
             );
@@ -173,6 +374,8 @@ async fn run_app<B: ratatui::backend::Backend>(
             }
         })?;
 
+        app.list_state = list_state;
+
         // Handle events
         let timeout = tick_rate.saturating_sub(last_tick.elapsed());
         if event::poll(timeout)? {
@@ -180,6 +383,11 @@ async fn run_app<B: ratatui::backend::Backend>(
                 if key.kind == KeyEventKind::Press {
                     if let Some(action) = handle_key(key, app.show_help) {
                         app.handle_action(action).await?;
+                        let next_request = build_metadata_request(app);
+                        if next_request != last_request {
+                            let _ = metadata_tx.send(next_request.clone());
+                            last_request = next_request;
+                        }
                     }
                 }
             }
@@ -189,12 +397,6 @@ async fn run_app<B: ratatui::backend::Backend>(
         if last_tick.elapsed() >= tick_rate {
             app.update_spectrum().await;
             last_tick = Instant::now();
-        }
-
-        // Update metadata periodically
-        if last_metadata.elapsed() >= metadata_interval {
-            let _ = app.update_metadata().await;
-            last_metadata = Instant::now();
         }
 
         // Check if should quit

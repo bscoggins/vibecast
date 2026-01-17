@@ -35,7 +35,7 @@ impl ImageCache {
         }
 
         // Fetch from network
-        let response = reqwest::get(url).await?;
+        let response = reqwest::get(url).await?.error_for_status()?;
         let bytes = response.bytes().await?.to_vec();
 
         // Cache it
