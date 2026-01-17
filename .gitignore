@@ -33,3 +33,8 @@ go.work
 # IDEs
 .vscode/
 .idea/
+
+
+# Added by cargo
+
+/target
