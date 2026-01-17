@@ -62,7 +62,9 @@ pub struct MpvController {
 
 impl MpvController {
     pub fn new() -> Self {
-        let socket_path = std::env::temp_dir().join("vibecast_mpv.sock");
+        // Use process ID in socket name to allow multiple instances
+        let socket_path =
+            std::env::temp_dir().join(format!("vibecast_mpv_{}.sock", std::process::id()));
         Self {
             socket_path,
             child: None,

@@ -2,10 +2,12 @@
 
 use anyhow::Result;
 use std::path::PathBuf;
+use std::time::Duration;
 use tokio::fs;
 
 pub struct ImageCache {
     cache_dir: PathBuf,
+    client: reqwest::Client,
 }
 
 impl ImageCache {
@@ -17,7 +19,12 @@ impl ImageCache {
             .join("artwork");
 
         std::fs::create_dir_all(&cache_dir)?;
-        Ok(Self { cache_dir })
+
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(10))
+            .build()?;
+
+        Ok(Self { cache_dir, client })
     }
 
     fn cache_path(&self, station_id: &str) -> PathBuf {
@@ -32,8 +39,8 @@ impl ImageCache {
             return Ok(fs::read(&cache_path).await?);
         }
 
-        // Fetch from network
-        let response = reqwest::get(url).await?.error_for_status()?;
+        // Fetch from network with timeout (configured in client)
+        let response = self.client.get(url).send().await?.error_for_status()?;
         let bytes = response.bytes().await?.to_vec();
 
         // Cache it
@@ -56,6 +63,10 @@ impl Default for ImageCache {
     fn default() -> Self {
         Self::new().unwrap_or_else(|_| Self {
             cache_dir: PathBuf::from(".vibecast-cache").join("artwork"),
+            client: reqwest::Client::builder()
+                .timeout(Duration::from_secs(10))
+                .build()
+                .unwrap_or_default(),
         })
     }
 }
