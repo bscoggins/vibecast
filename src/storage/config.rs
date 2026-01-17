@@ -36,9 +36,7 @@ impl ConfigStore {
     fn config_path() -> Result<PathBuf> {
         let config_dir = directories::ProjectDirs::from("com", "vibecast", "vibecast")
             .map(|dirs| dirs.config_dir().to_path_buf())
-            .or_else(|| {
-                directories::BaseDirs::new().map(|d| d.config_dir().join("vibecast"))
-            })
+            .or_else(|| directories::BaseDirs::new().map(|d| d.config_dir().join("vibecast")))
             .unwrap_or_else(|| PathBuf::from(".").join("vibecast"));
 
         std::fs::create_dir_all(&config_dir)?;
@@ -74,7 +72,8 @@ impl ConfigStore {
             ThemeType::Sunset => "Sunset",
             ThemeType::Monochrome => "Mono",
             ThemeType::Cyberpunk => "Cyberpunk",
-        }.to_string();
+        }
+        .to_string();
     }
 
     pub fn visualization_mode(&self) -> VisualizationMode {

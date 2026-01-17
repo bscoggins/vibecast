@@ -6,9 +6,9 @@ use ratatui::{
 };
 use ratatui_image::{FilterType, Resize, StatefulImage};
 
-use crate::api::{AudioQuality, Channel, Song};
 use super::artwork::ArtworkState;
 use super::theme::Theme;
+use crate::api::{AudioQuality, Channel, Song};
 
 pub struct NowPlaying<'a> {
     channel: Option<&'a Channel>,
@@ -69,7 +69,10 @@ impl<'a> NowPlaying<'a> {
                 Span::styled(format!("{} ", status), status_style),
                 Span::styled(&channel.title, theme.selected_style()),
                 Span::styled(" ", theme.muted_style()),
-                Span::styled(format!("[{}]", quality_label), ratatui::style::Style::default().fg(theme.accent)),
+                Span::styled(
+                    format!("[{}]", quality_label),
+                    ratatui::style::Style::default().fg(theme.accent),
+                ),
             ]);
             Paragraph::new(station_line).render(chunks[0], buf);
 
@@ -84,15 +87,15 @@ impl<'a> NowPlaying<'a> {
                     Span::styled("  ", theme.muted_style()),
                     Span::styled(&channel.genre, theme.muted_style()),
                     Span::styled(" • ", theme.muted_style()),
-                    Span::styled(format!("{} listeners", channel.listeners), theme.muted_style()),
+                    Span::styled(
+                        format!("{} listeners", channel.listeners),
+                        theme.muted_style(),
+                    ),
                 ]);
                 Paragraph::new(genre_line).render(genre_area, buf);
             }
         } else {
-            let no_station = Line::from(Span::styled(
-                "No station selected",
-                theme.muted_style(),
-            ));
+            let no_station = Line::from(Span::styled("No station selected", theme.muted_style()));
             Paragraph::new(no_station).render(chunks[0], buf);
         }
 
@@ -104,13 +107,21 @@ impl<'a> NowPlaying<'a> {
             // Title
             lines.push(Line::from(vec![
                 Span::styled("♫ ", ratatui::style::Style::default().fg(theme.accent)),
-                Span::styled(&song.title, theme.normal_style().add_modifier(ratatui::style::Modifier::BOLD)),
+                Span::styled(
+                    &song.title,
+                    theme
+                        .normal_style()
+                        .add_modifier(ratatui::style::Modifier::BOLD),
+                ),
             ]));
 
             // Artist
             lines.push(Line::from(vec![
                 Span::styled("  by ", theme.muted_style()),
-                Span::styled(&song.artist, ratatui::style::Style::default().fg(theme.secondary)),
+                Span::styled(
+                    &song.artist,
+                    ratatui::style::Style::default().fg(theme.secondary),
+                ),
             ]));
 
             // Album
@@ -130,7 +141,12 @@ impl<'a> NowPlaying<'a> {
                 vec![
                     Line::from(vec![
                         Span::styled("♫ ", ratatui::style::Style::default().fg(theme.accent)),
-                        Span::styled(song_title, theme.normal_style().add_modifier(ratatui::style::Modifier::BOLD)),
+                        Span::styled(
+                            song_title,
+                            theme
+                                .normal_style()
+                                .add_modifier(ratatui::style::Modifier::BOLD),
+                        ),
                     ]),
                     Line::from(vec![
                         Span::styled("  by ", theme.muted_style()),
@@ -145,10 +161,7 @@ impl<'a> NowPlaying<'a> {
             };
             Paragraph::new(lines).render(song_area, buf);
         } else if self.channel.is_some() {
-            let waiting = Line::from(Span::styled(
-                "Loading song info...",
-                theme.muted_style(),
-            ));
+            let waiting = Line::from(Span::styled("Loading song info...", theme.muted_style()));
             Paragraph::new(waiting).render(song_area, buf);
         }
     }
@@ -199,8 +212,8 @@ impl<'a> StatefulWidget for NowPlaying<'a> {
 
             // Render artwork with high-quality scaling
             if let Some(ref mut protocol) = state.protocol {
-                let image = StatefulImage::default()
-                    .resize(Resize::Fit(Some(FilterType::Lanczos3)));
+                let image =
+                    StatefulImage::default().resize(Resize::Fit(Some(FilterType::Lanczos3)));
                 StatefulWidget::render(image, art_area, buf, protocol);
             }
 

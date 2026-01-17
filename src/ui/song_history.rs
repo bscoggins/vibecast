@@ -8,8 +8,8 @@ use ratatui::{
 };
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-use crate::api::Song;
 use super::theme::Theme;
+use crate::api::Song;
 
 pub struct SongHistory<'a> {
     songs: &'a [Song],
@@ -72,10 +72,7 @@ impl<'a> Widget for SongHistory<'a> {
         }
 
         if self.songs.is_empty() {
-            let empty = Line::from(Span::styled(
-                "No history available",
-                theme.muted_style(),
-            ));
+            let empty = Line::from(Span::styled("No history available", theme.muted_style()));
             Paragraph::new(empty).render(inner, buf);
             return;
         }

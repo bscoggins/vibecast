@@ -16,7 +16,13 @@ pub struct StatusBar<'a> {
 }
 
 impl<'a> StatusBar<'a> {
-    pub fn new(is_playing: bool, is_paused: bool, volume: u8, theme_name: &'a str, theme: &'a Theme) -> Self {
+    pub fn new(
+        is_playing: bool,
+        is_paused: bool,
+        volume: u8,
+        theme_name: &'a str,
+        theme: &'a Theme,
+    ) -> Self {
         Self {
             is_playing,
             is_paused,

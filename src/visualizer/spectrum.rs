@@ -118,8 +118,8 @@ impl SpectrumAnalyzer {
     pub async fn update_from_levels(&self, rms_db: f32, peak_db: f32) {
         // Convert dB to linear (0-1 range)
         // Typical audio range: -60dB (silent) to 0dB (max)
-        let rms = db_to_linear(rms_db.max(-60.0).min(0.0));
-        let peak = db_to_linear(peak_db.max(-60.0).min(0.0));
+        let rms = db_to_linear(rms_db.clamp(-60.0, 0.0));
+        let peak = db_to_linear(peak_db.clamp(-60.0, 0.0));
 
         let mut data = self.data.write().await;
         data.simulate_from_levels(rms, peak);

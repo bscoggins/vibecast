@@ -6,8 +6,8 @@ use ratatui::{
     widgets::{Block, Borders, Widget},
 };
 
-use crate::visualizer::SpectrumData;
 use super::theme::Theme;
+use crate::visualizer::SpectrumData;
 
 /// Different visualization modes
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -128,10 +128,15 @@ impl<'a> Visualizer<'a> {
                 let px = (cx + x * scale_x * 0.15) as u16;
                 let py = (cy + y * scale_y * 0.3) as u16;
 
-                if px >= area.x && px < area.x + area.width && py >= area.y && py < area.y + area.height {
+                if px >= area.x
+                    && px < area.x + area.width
+                    && py >= area.y
+                    && py < area.y + area.height
+                {
                     // Vary character and color based on position in pattern
                     let intensity = (i as f32 / num_points as f32 + energy) % 1.0;
-                    let char_idx = ((intensity * (SPIRO_CHARS.len() - 1) as f32) as usize).min(SPIRO_CHARS.len() - 1);
+                    let char_idx = ((intensity * (SPIRO_CHARS.len() - 1) as f32) as usize)
+                        .min(SPIRO_CHARS.len() - 1);
 
                     let color = if intensity > 0.8 {
                         self.theme.highlight
@@ -142,19 +147,31 @@ impl<'a> Visualizer<'a> {
                     };
 
                     if let Some(cell) = buf.cell_mut((px, py)) {
-                        cell.set_char(SPIRO_CHARS[char_idx]).set_style(Style::default().fg(color));
+                        cell.set_char(SPIRO_CHARS[char_idx])
+                            .set_style(Style::default().fg(color));
                     }
                 }
             }
         }
 
         // Center decoration
-        let center_char = if energy > 0.6 { '◉' } else if energy > 0.3 { '●' } else { '○' };
+        let center_char = if energy > 0.6 {
+            '◉'
+        } else if energy > 0.3 {
+            '●'
+        } else {
+            '○'
+        };
         let center_x = cx as u16;
         let center_y = cy as u16;
-        if center_x >= area.x && center_x < area.x + area.width && center_y >= area.y && center_y < area.y + area.height {
+        if center_x >= area.x
+            && center_x < area.x + area.width
+            && center_y >= area.y
+            && center_y < area.y + area.height
+        {
             if let Some(cell) = buf.cell_mut((center_x, center_y)) {
-                cell.set_char(center_char).set_style(Style::default().fg(self.theme.highlight));
+                cell.set_char(center_char)
+                    .set_style(Style::default().fg(self.theme.highlight));
             }
         }
     }
@@ -185,7 +202,12 @@ impl<'a> Visualizer<'a> {
                 continue;
             }
 
-            let colors = [self.theme.accent, self.theme.primary, self.theme.secondary, self.theme.highlight];
+            let colors = [
+                self.theme.accent,
+                self.theme.primary,
+                self.theme.secondary,
+                self.theme.highlight,
+            ];
             let style = Style::default().fg(colors[ring % colors.len()]);
 
             // Draw the ring using a circle approximation
@@ -198,15 +220,26 @@ impl<'a> Visualizer<'a> {
                 let xi = x as u16;
                 let yi = y as u16;
 
-                if xi >= area.x && xi < area.x + area.width && yi >= area.y && yi < area.y + area.height {
-                    let char = if intensity > 0.7 { '█' } else if intensity > 0.5 { '●' } else if intensity > 0.3 { '○' } else { '·' };
+                if xi >= area.x
+                    && xi < area.x + area.width
+                    && yi >= area.y
+                    && yi < area.y + area.height
+                {
+                    let char = if intensity > 0.7 {
+                        '█'
+                    } else if intensity > 0.5 {
+                        '●'
+                    } else if intensity > 0.3 {
+                        '○'
+                    } else {
+                        '·'
+                    };
                     if let Some(cell) = buf.cell_mut((xi, yi)) {
                         cell.set_char(char).set_style(style);
                     }
                 }
             }
         }
-
     }
 
     fn render_wave(&self, area: Rect, buf: &mut Buffer) {
@@ -226,7 +259,8 @@ impl<'a> Visualizer<'a> {
             let amplitude = (area.height as f32 / 2.0 - 1.0) * (0.2 + energy * 0.8);
             let y_offset = (combined * amplitude) as i16;
 
-            let y = (mid_y as i16 + y_offset).clamp(area.y as i16, (area.y + area.height - 1) as i16) as u16;
+            let y = (mid_y as i16 + y_offset)
+                .clamp(area.y as i16, (area.y + area.height - 1) as i16) as u16;
 
             // Draw the wave point and a trail below/above
             let style = if energy > 0.5 {
@@ -277,7 +311,7 @@ impl<'a> Visualizer<'a> {
 
             // Each ball has its own horizontal position with slight wave motion
             let base_x = area.x as f32 + (area.width as f32 * x_pos);
-            let x_wave = ((time * 0.5 + phase_offset).sin() * (area.width as f32 * 0.08)) as f32;
+            let x_wave = (time * 0.5 + phase_offset).sin() * (area.width as f32 * 0.08);
             let x = (base_x + x_wave).clamp(area.x as f32, (area.x + area.width - 1) as f32) as u16;
             let y = area.y + area.height - 1 - bounce.min(area.height - 1);
 
@@ -290,10 +324,15 @@ impl<'a> Visualizer<'a> {
             // Shadow at bottom - smaller when ball is higher
             if area.height > 2 {
                 let shadow_y = area.y + area.height - 1;
-                let shadow_char = if bounce > (area.height / 2) { '.' } else { '─' };
+                let shadow_char = if bounce > (area.height / 2) {
+                    '.'
+                } else {
+                    '─'
+                };
                 if x >= area.x && x < area.x + area.width {
                     if let Some(cell) = buf.cell_mut((x, shadow_y)) {
-                        cell.set_char(shadow_char).set_style(Style::default().fg(self.theme.muted));
+                        cell.set_char(shadow_char)
+                            .set_style(Style::default().fg(self.theme.muted));
                     }
                 }
             }
@@ -408,8 +447,8 @@ impl<'a> Visualizer<'a> {
 
         // Three spirals displayed horizontally with different colors
         let spiral_configs = [
-            (area.width / 6, self.theme.accent, 1.0),      // Left spiral
-            (area.width / 2, self.theme.primary, -1.0),    // Center spiral (opposite direction)
+            (area.width / 6, self.theme.accent, 1.0),   // Left spiral
+            (area.width / 2, self.theme.primary, -1.0), // Center spiral (opposite direction)
             (area.width * 5 / 6, self.theme.secondary, 1.0), // Right spiral
         ];
 
@@ -425,21 +464,24 @@ impl<'a> Visualizer<'a> {
                 for i in 0..40 {
                     let t = i as f32 / 40.0;
                     let radius = t * max_radius * (0.5 + energy * 0.5);
-                    let angle = t * std::f32::consts::PI * 4.0 + time * direction * (1.0 + energy) + arm_offset;
+                    let angle = t * std::f32::consts::PI * 4.0
+                        + time * direction * (1.0 + energy)
+                        + arm_offset;
 
                     let x = (cx + angle.cos() * radius * 0.8) as u16;
                     let y = (cy + angle.sin() * radius * 0.4) as u16;
 
-                    if x >= area.x && x < area.x + area.width && y >= area.y && y < area.y + area.height {
+                    if x >= area.x
+                        && x < area.x + area.width
+                        && y >= area.y
+                        && y < area.y + area.height
+                    {
                         let char_idx = ((t * 4.0) as usize).min(spiral_chars.len() - 1);
-                        let point_color = if t > 0.7 {
-                            self.theme.highlight
-                        } else {
-                            color
-                        };
+                        let point_color = if t > 0.7 { self.theme.highlight } else { color };
 
                         if let Some(cell) = buf.cell_mut((x, y)) {
-                            cell.set_char(spiral_chars[char_idx]).set_style(Style::default().fg(point_color));
+                            cell.set_char(spiral_chars[char_idx])
+                                .set_style(Style::default().fg(point_color));
                         }
                     }
                 }
@@ -465,13 +507,20 @@ impl<'a> Visualizer<'a> {
 
             // Very slow rain - gentle falling effect
             let base_speed = 0.02 + energy * 0.04 + (seed % 100) as f32 / 2000.0;
-            let y_offset = ((time as f32 * base_speed + seed as f32 * 0.02) % (area.height as f32 + 10.0)) as u16;
+            let y_offset = ((time as f32 * base_speed + seed as f32 * 0.02)
+                % (area.height as f32 + 10.0)) as u16;
 
             if y_offset < area.height {
                 let y = area.y + y_offset;
 
                 // Longer drops at higher energy
-                let drop_len = if energy > 0.6 { 4 } else if energy > 0.3 { 3 } else { 2 };
+                let drop_len = if energy > 0.6 {
+                    4
+                } else if energy > 0.3 {
+                    3
+                } else {
+                    2
+                };
 
                 for d in 0..drop_len {
                     let dy = y.saturating_sub(d);
@@ -488,7 +537,8 @@ impl<'a> Visualizer<'a> {
                         };
 
                         if let Some(cell) = buf.cell_mut((x, dy)) {
-                            cell.set_char(rain_chars[char_idx]).set_style(Style::default().fg(color));
+                            cell.set_char(rain_chars[char_idx])
+                                .set_style(Style::default().fg(color));
                         }
                     }
                 }
@@ -503,7 +553,8 @@ impl<'a> Visualizer<'a> {
                 let seed = (i as u64 * 13 + time / 3) % 1000;
                 let x = area.x + (seed as u16 % area.width);
                 if let Some(cell) = buf.cell_mut((x, splash_y)) {
-                    cell.set_char('∙').set_style(Style::default().fg(self.theme.accent));
+                    cell.set_char('∙')
+                        .set_style(Style::default().fg(self.theme.accent));
                 }
             }
         }

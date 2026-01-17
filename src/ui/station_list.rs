@@ -6,8 +6,8 @@ use ratatui::{
 };
 use std::collections::HashSet;
 
-use crate::api::Channel;
 use super::theme::Theme;
+use crate::api::Channel;
 
 pub struct StationList<'a> {
     channels: &'a [Channel],

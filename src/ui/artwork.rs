@@ -14,9 +14,7 @@ static PICKER: OnceLock<Option<Picker>> = OnceLock::new();
 pub fn init_picker() {
     PICKER.get_or_init(|| {
         // Try to create a picker, catching any panics
-        std::panic::catch_unwind(|| {
-            Picker::from_query_stdio().ok()
-        }).unwrap_or(None)
+        std::panic::catch_unwind(|| Picker::from_query_stdio().ok()).unwrap_or(None)
     });
 }
 

@@ -15,7 +15,10 @@ pub struct Header<'a> {
 
 impl<'a> Header<'a> {
     pub fn new(station_name: Option<&'a str>, theme: &'a Theme) -> Self {
-        Self { station_name, theme }
+        Self {
+            station_name,
+            theme,
+        }
     }
 }
 
@@ -34,11 +37,7 @@ impl<'a> Widget for Header<'a> {
             .chars()
             .enumerate()
             .map(|(i, c)| {
-                let colors = [
-                    theme.primary,
-                    theme.secondary,
-                    theme.accent,
-                ];
+                let colors = [theme.primary, theme.secondary, theme.accent];
                 let color = colors[i % colors.len()];
                 Span::styled(
                     c.to_string(),

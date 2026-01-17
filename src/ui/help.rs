@@ -52,39 +52,57 @@ impl<'a> Widget for HelpOverlay<'a> {
         block.render(popup_area, buf);
 
         let shortcuts = vec![
-            ("Playback", vec![
-                ("p / Space", "Play / Pause"),
-                ("Enter", "Play selected station"),
-                ("q / Esc", "Quit"),
-            ]),
-            ("Navigation", vec![
-                ("j / Down", "Move down"),
-                ("k / Up", "Move up"),
-                ("g", "Go to top"),
-                ("G", "Go to bottom"),
-            ]),
-            ("Volume", vec![
-                ("+ / =", "Volume up"),
-                ("- / _", "Volume down"),
-                ("m", "Mute / Unmute"),
-            ]),
-            ("Stations", vec![
-                ("f", "Toggle favorite"),
-                ("s", "Cycle sort mode"),
-                ("R", "Refresh stations"),
-            ]),
-            ("Display", vec![
-                ("v", "Cycle visualization style"),
-                ("V", "Show/hide visualizer"),
-                ("a", "Toggle artwork"),
-                ("r", "Toggle recently played"),
-                ("t", "Cycle color theme"),
-            ]),
-            ("Audio", vec![
-                ("< / ,", "Lower audio quality"),
-                ("> / .", "Higher audio quality"),
-                ("?", "Toggle this help"),
-            ]),
+            (
+                "Playback",
+                vec![
+                    ("p / Space", "Play / Pause"),
+                    ("Enter", "Play selected station"),
+                    ("q / Esc", "Quit"),
+                ],
+            ),
+            (
+                "Navigation",
+                vec![
+                    ("j / Down", "Move down"),
+                    ("k / Up", "Move up"),
+                    ("g", "Go to top"),
+                    ("G", "Go to bottom"),
+                ],
+            ),
+            (
+                "Volume",
+                vec![
+                    ("+ / =", "Volume up"),
+                    ("- / _", "Volume down"),
+                    ("m", "Mute / Unmute"),
+                ],
+            ),
+            (
+                "Stations",
+                vec![
+                    ("f", "Toggle favorite"),
+                    ("s", "Cycle sort mode"),
+                    ("R", "Refresh stations"),
+                ],
+            ),
+            (
+                "Display",
+                vec![
+                    ("v", "Cycle visualization style"),
+                    ("V", "Show/hide visualizer"),
+                    ("a", "Toggle artwork"),
+                    ("r", "Toggle recently played"),
+                    ("t", "Cycle color theme"),
+                ],
+            ),
+            (
+                "Audio",
+                vec![
+                    ("< / ,", "Lower audio quality"),
+                    ("> / .", "Higher audio quality"),
+                    ("?", "Toggle this help"),
+                ],
+            ),
         ];
 
         let mut lines = vec![];

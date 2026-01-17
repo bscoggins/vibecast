@@ -3,7 +3,7 @@ use ratatui::widgets::ListState;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::api::{AudioQuality, Channel, Song, SomaFmClient};
+use crate::api::{AudioQuality, Channel, SomaFmClient, Song};
 use crate::input::Action;
 use crate::player::{MpvController, PlaybackState};
 use crate::storage::{ConfigStore, FavoritesStore};
@@ -134,14 +134,11 @@ impl App {
                 });
             }
             SortMode::Alphabetical => {
-                indices.sort_by(|&a, &b| {
-                    self.channels[a].title.cmp(&self.channels[b].title)
-                });
+                indices.sort_by(|&a, &b| self.channels[a].title.cmp(&self.channels[b].title));
             }
             SortMode::ListenersOnly => {
-                indices.sort_by(|&a, &b| {
-                    self.channels[b].listeners.cmp(&self.channels[a].listeners)
-                });
+                indices
+                    .sort_by(|&a, &b| self.channels[b].listeners.cmp(&self.channels[a].listeners));
             }
         }
 
@@ -260,7 +257,8 @@ impl App {
                 let len = self.sorted_indices.len();
                 if len > 0 {
                     let current = self.list_state.selected().unwrap_or(0);
-                    self.list_state.select(Some(current.checked_sub(1).unwrap_or(len - 1)));
+                    self.list_state
+                        .select(Some(current.checked_sub(1).unwrap_or(len - 1)));
                 }
             }
             Action::GoToTop => {
@@ -354,25 +352,24 @@ impl App {
         // Use cached audio stats from the background worker when available
         if let Some((rms_db, peak_db)) = self.audio_levels {
             if self.playback_state.playing && !self.playback_state.paused {
-                self.spectrum_analyzer.update_from_levels(rms_db, peak_db).await;
+                self.spectrum_analyzer
+                    .update_from_levels(rms_db, peak_db)
+                    .await;
             } else {
-                self.spectrum_analyzer.animate(
-                    self.playback_state.playing,
-                    self.playback_state.paused,
-                ).await;
+                self.spectrum_analyzer
+                    .animate(self.playback_state.playing, self.playback_state.paused)
+                    .await;
             }
         } else {
             // Fall back to animated visualization
-            self.spectrum_analyzer.animate(
-                self.playback_state.playing,
-                self.playback_state.paused,
-            ).await;
+            self.spectrum_analyzer
+                .animate(self.playback_state.playing, self.playback_state.paused)
+                .await;
         }
 
         // Update the cached spectrum data for rendering
         self.spectrum_data = self.spectrum_analyzer.get_data().await;
     }
-
 }
 
 impl Default for App {

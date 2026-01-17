@@ -68,11 +68,11 @@ impl Theme {
             name: "Synthwave",
             background: Color::Rgb(20, 12, 28),
             foreground: Color::Rgb(255, 230, 250),
-            primary: Color::Rgb(255, 0, 128),      // Hot pink
-            secondary: Color::Rgb(0, 255, 255),    // Cyan
-            accent: Color::Rgb(255, 100, 200),     // Light pink
+            primary: Color::Rgb(255, 0, 128),   // Hot pink
+            secondary: Color::Rgb(0, 255, 255), // Cyan
+            accent: Color::Rgb(255, 100, 200),  // Light pink
             muted: Color::Rgb(120, 80, 140),
-            highlight: Color::Rgb(255, 220, 0),    // Yellow
+            highlight: Color::Rgb(255, 220, 0), // Yellow
             success: Color::Rgb(0, 255, 180),
             warning: Color::Rgb(255, 180, 0),
         }
@@ -83,11 +83,11 @@ impl Theme {
             name: "Ocean",
             background: Color::Rgb(10, 25, 47),
             foreground: Color::Rgb(200, 220, 240),
-            primary: Color::Rgb(100, 180, 255),    // Sky blue
-            secondary: Color::Rgb(0, 200, 180),    // Teal
-            accent: Color::Rgb(150, 220, 255),     // Light blue
+            primary: Color::Rgb(100, 180, 255), // Sky blue
+            secondary: Color::Rgb(0, 200, 180), // Teal
+            accent: Color::Rgb(150, 220, 255),  // Light blue
             muted: Color::Rgb(70, 100, 130),
-            highlight: Color::Rgb(255, 200, 100),  // Sandy
+            highlight: Color::Rgb(255, 200, 100), // Sandy
             success: Color::Rgb(80, 220, 150),
             warning: Color::Rgb(255, 180, 80),
         }
@@ -98,11 +98,11 @@ impl Theme {
             name: "Forest",
             background: Color::Rgb(15, 25, 15),
             foreground: Color::Rgb(220, 235, 210),
-            primary: Color::Rgb(120, 200, 80),     // Leaf green
-            secondary: Color::Rgb(180, 140, 80),   // Wood brown
-            accent: Color::Rgb(200, 230, 150),     // Light green
+            primary: Color::Rgb(120, 200, 80),   // Leaf green
+            secondary: Color::Rgb(180, 140, 80), // Wood brown
+            accent: Color::Rgb(200, 230, 150),   // Light green
             muted: Color::Rgb(80, 100, 70),
-            highlight: Color::Rgb(255, 200, 80),   // Sunlight
+            highlight: Color::Rgb(255, 200, 80), // Sunlight
             success: Color::Rgb(100, 220, 100),
             warning: Color::Rgb(220, 180, 60),
         }
@@ -113,11 +113,11 @@ impl Theme {
             name: "Sunset",
             background: Color::Rgb(30, 15, 25),
             foreground: Color::Rgb(255, 240, 230),
-            primary: Color::Rgb(255, 100, 50),     // Orange
-            secondary: Color::Rgb(255, 180, 100),  // Light orange
-            accent: Color::Rgb(255, 80, 120),      // Pink-red
+            primary: Color::Rgb(255, 100, 50),    // Orange
+            secondary: Color::Rgb(255, 180, 100), // Light orange
+            accent: Color::Rgb(255, 80, 120),     // Pink-red
             muted: Color::Rgb(140, 90, 100),
-            highlight: Color::Rgb(255, 220, 100),  // Yellow
+            highlight: Color::Rgb(255, 220, 100), // Yellow
             success: Color::Rgb(150, 230, 120),
             warning: Color::Rgb(255, 200, 80),
         }
@@ -128,11 +128,11 @@ impl Theme {
             name: "Mono",
             background: Color::Rgb(15, 15, 15),
             foreground: Color::Rgb(220, 220, 220),
-            primary: Color::Rgb(255, 255, 255),    // White
-            secondary: Color::Rgb(180, 180, 180),  // Light gray
-            accent: Color::Rgb(200, 200, 200),     // Gray
+            primary: Color::Rgb(255, 255, 255),   // White
+            secondary: Color::Rgb(180, 180, 180), // Light gray
+            accent: Color::Rgb(200, 200, 200),    // Gray
             muted: Color::Rgb(100, 100, 100),
-            highlight: Color::Rgb(255, 255, 255),  // White
+            highlight: Color::Rgb(255, 255, 255), // White
             success: Color::Rgb(180, 255, 180),
             warning: Color::Rgb(255, 220, 150),
         }
@@ -142,12 +142,12 @@ impl Theme {
         Self {
             name: "Cyberpunk",
             background: Color::Rgb(10, 10, 20),
-            foreground: Color::Rgb(0, 255, 65),    // Matrix green
-            primary: Color::Rgb(0, 255, 65),       // Neon green
-            secondary: Color::Rgb(255, 0, 100),    // Neon pink
-            accent: Color::Rgb(0, 200, 255),       // Neon blue
+            foreground: Color::Rgb(0, 255, 65), // Matrix green
+            primary: Color::Rgb(0, 255, 65),    // Neon green
+            secondary: Color::Rgb(255, 0, 100), // Neon pink
+            accent: Color::Rgb(0, 200, 255),    // Neon blue
             muted: Color::Rgb(0, 100, 40),
-            highlight: Color::Rgb(255, 255, 0),    // Yellow
+            highlight: Color::Rgb(255, 255, 0), // Yellow
             success: Color::Rgb(0, 255, 100),
             warning: Color::Rgb(255, 150, 0),
         }

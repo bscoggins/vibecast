@@ -118,16 +118,20 @@ impl Channel {
         let quality_str = quality.quality_str();
 
         // Try AAC first at requested quality
-        if let Some(playlist) = self.playlists.iter().find(|p| {
-            p.quality == quality_str && p.format == "aac"
-        }) {
+        if let Some(playlist) = self
+            .playlists
+            .iter()
+            .find(|p| p.quality == quality_str && p.format == "aac")
+        {
             return playlist.url.clone();
         }
 
         // Try MP3 at requested quality
-        if let Some(playlist) = self.playlists.iter().find(|p| {
-            p.quality == quality_str && p.format == "mp3"
-        }) {
+        if let Some(playlist) = self
+            .playlists
+            .iter()
+            .find(|p| p.quality == quality_str && p.format == "mp3")
+        {
             return playlist.url.clone();
         }
 
@@ -144,16 +148,20 @@ impl Channel {
     /// Prefers: highest quality AAC > highest quality MP3 > any available
     pub fn best_stream_url(&self) -> String {
         // First try to find highest quality AAC
-        if let Some(playlist) = self.playlists.iter().find(|p| {
-            p.quality == "highest" && p.format == "aac"
-        }) {
+        if let Some(playlist) = self
+            .playlists
+            .iter()
+            .find(|p| p.quality == "highest" && p.format == "aac")
+        {
             return playlist.url.clone();
         }
 
         // Then try highest quality MP3
-        if let Some(playlist) = self.playlists.iter().find(|p| {
-            p.quality == "highest" && p.format == "mp3"
-        }) {
+        if let Some(playlist) = self
+            .playlists
+            .iter()
+            .find(|p| p.quality == "highest" && p.format == "mp3")
+        {
             return playlist.url.clone();
         }
 
@@ -163,7 +171,8 @@ impl Channel {
         }
 
         // Fall back to first available
-        self.playlists.first()
+        self.playlists
+            .first()
             .map(|p| p.url.clone())
             .unwrap_or_else(|| format!("https://ice.somafm.com/{}", self.id))
     }

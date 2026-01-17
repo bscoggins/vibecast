@@ -153,7 +153,8 @@ impl MpvController {
     }
 
     async fn send_command(&mut self, command: Vec<Value>) -> Result<Value> {
-        self.send_command_with_timeout(command, Duration::from_secs(2)).await
+        self.send_command_with_timeout(command, Duration::from_secs(2))
+            .await
     }
 
     async fn send_command_with_timeout(
@@ -161,8 +162,14 @@ impl MpvController {
         command: Vec<Value>,
         read_timeout: Duration,
     ) -> Result<Value> {
-        let writer = self.writer.as_mut().ok_or_else(|| anyhow!("Not connected to mpv"))?;
-        let reader = self.reader.as_mut().ok_or_else(|| anyhow!("Not connected to mpv"))?;
+        let writer = self
+            .writer
+            .as_mut()
+            .ok_or_else(|| anyhow!("Not connected to mpv"))?;
+        let reader = self
+            .reader
+            .as_mut()
+            .ok_or_else(|| anyhow!("Not connected to mpv"))?;
 
         let request_id = self.request_id.fetch_add(1, Ordering::SeqCst);
         let cmd = MpvCommand {
@@ -211,7 +218,10 @@ impl MpvController {
             return Ok(());
         }
 
-        match self.send_command(vec![json!("cycle"), json!("pause")]).await {
+        match self
+            .send_command(vec![json!("cycle"), json!("pause")])
+            .await
+        {
             Ok(_) => {
                 self.state.paused = !self.state.paused;
                 Ok(())
@@ -232,7 +242,10 @@ impl MpvController {
             return Ok(());
         }
 
-        match self.send_command(vec![json!("set_property"), json!("volume"), json!(volume)]).await {
+        match self
+            .send_command(vec![json!("set_property"), json!("volume"), json!(volume)])
+            .await
+        {
             Ok(_) => {
                 self.state.volume = volume;
                 Ok(())
@@ -262,7 +275,9 @@ impl MpvController {
         }
 
         // Try to get media-title first (works better with streams)
-        let title_result = self.send_command(vec![json!("get_property"), json!("media-title")]).await;
+        let title_result = self
+            .send_command(vec![json!("get_property"), json!("media-title")])
+            .await;
 
         if let Ok(Value::String(title)) = title_result {
             if !title.is_empty() {
@@ -279,7 +294,9 @@ impl MpvController {
         }
 
         // Fall back to metadata property
-        let metadata = self.send_command(vec![json!("get_property"), json!("metadata")]).await;
+        let metadata = self
+            .send_command(vec![json!("get_property"), json!("metadata")])
+            .await;
 
         if let Ok(Value::Object(map)) = metadata {
             let title = map
@@ -322,7 +339,11 @@ impl MpvController {
     /// Get audio levels from the astats filter for visualization
     /// Returns (rms_db, peak_db) if available
     pub async fn get_audio_stats(&mut self) -> Option<(f32, f32)> {
-        if self.reader.is_none() || self.writer.is_none() || !self.state.playing || self.state.paused {
+        if self.reader.is_none()
+            || self.writer.is_none()
+            || !self.state.playing
+            || self.state.paused
+        {
             return None;
         }
 
@@ -374,9 +395,10 @@ impl MpvController {
                 // This provides variation that looks like audio response
                 // Generate levels that produce good visualizer movement (-12dB to -3dB range)
                 let base = (t * 7.3).sin() * 0.3 + (t * 11.7).cos() * 0.2 + 0.5;
-                let beat = (t * 2.5).sin().abs().powf(2.0) * 0.3;  // Beat-like pulses
+                let beat = (t * 2.5).sin().abs().powf(2.0) * 0.3; // Beat-like pulses
                 let variation = (t * 23.1).sin() * 0.15;
-                let rms = -12.0 + (base * 8.0) as f32 + (beat * 6.0) as f32 + (variation * 4.0) as f32;
+                let rms =
+                    -12.0 + (base * 8.0) as f32 + (beat * 6.0) as f32 + (variation * 4.0) as f32;
                 let peak = rms + 2.0 + ((t * 31.4).sin().abs() * 3.0) as f32;
                 return Some((rms.clamp(-18.0, -3.0), peak.clamp(-15.0, 0.0)));
             }

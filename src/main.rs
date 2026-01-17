@@ -24,13 +24,15 @@ use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, watch, Mutex};
 use tokio::time;
 
-use image::DynamicImage;
 use api::{SomaFmClient, Song};
 use app::App;
 use artwork::ImageCache;
+use image::DynamicImage;
 use input::handle_key;
 use player::MpvController;
-use ui::{Header, HelpOverlay, NowPlaying, SongHistory, StationList, StatusBar, Visualizer, init_picker};
+use ui::{
+    init_picker, Header, HelpOverlay, NowPlaying, SongHistory, StationList, StatusBar, Visualizer,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct MetadataRequest {
@@ -102,7 +104,9 @@ async fn metadata_worker(
             continue;
         };
 
-        if let Ok(Ok(songs)) = time::timeout(Duration::from_secs(5), api_client.get_songs(&channel_id)).await {
+        if let Ok(Ok(songs)) =
+            time::timeout(Duration::from_secs(5), api_client.get_songs(&channel_id)).await
+        {
             let current_song = songs.first().cloned();
             let history = songs.into_iter().skip(1).take(5).collect();
             let _ = update_tx.send(AppUpdate::Songs {
@@ -279,9 +283,9 @@ async fn run_app<B: ratatui::backend::Backend>(
 
             // Main layout
             let chunks = Layout::vertical([
-                Constraint::Length(3),  // Header
-                Constraint::Min(10),    // Main content
-                Constraint::Length(1),  // Status bar
+                Constraint::Length(3), // Header
+                Constraint::Min(10),   // Main content
+                Constraint::Length(1), // Status bar
             ])
             .split(area);
 
@@ -292,8 +296,8 @@ async fn run_app<B: ratatui::backend::Backend>(
 
             // Main content - split horizontally
             let content_chunks = Layout::horizontal([
-                Constraint::Percentage(35),  // Station list
-                Constraint::Percentage(65),  // Right panel
+                Constraint::Percentage(35), // Station list
+                Constraint::Percentage(65), // Right panel
             ])
             .split(chunks[1]);
 
@@ -312,9 +316,9 @@ async fn run_app<B: ratatui::backend::Backend>(
             // Right panel - split vertically for now playing, history, and visualizer
             let show_history = app.show_history && !app.song_history.is_empty();
             let right_chunks = Layout::vertical([
-                Constraint::Min(8),                                     // Now playing
-                Constraint::Length(if show_history { 8 } else { 0 }),   // Song history
-                Constraint::Length(if app.show_visualizer { 12 } else { 0 }),  // Visualizer (doubled)
+                Constraint::Min(8),                                           // Now playing
+                Constraint::Length(if show_history { 8 } else { 0 }),         // Song history
+                Constraint::Length(if app.show_visualizer { 12 } else { 0 }), // Visualizer (doubled)
             ])
             .split(content_chunks[1]);
 
@@ -333,11 +337,7 @@ async fn run_app<B: ratatui::backend::Backend>(
                 app.show_artwork,
                 theme,
             );
-            f.render_stateful_widget(
-                now_playing,
-                right_chunks[0],
-                &mut app.artwork_state,
-            );
+            f.render_stateful_widget(now_playing, right_chunks[0], &mut app.artwork_state);
 
             // Song history panel
             if show_history {
@@ -362,7 +362,11 @@ async fn run_app<B: ratatui::backend::Backend>(
             let status_bar = StatusBar::new(
                 app.playback_state.playing,
                 app.playback_state.paused,
-                if app.is_muted { 0 } else { app.playback_state.volume },
+                if app.is_muted {
+                    0
+                } else {
+                    app.playback_state.volume
+                },
                 app.theme.name,
                 theme,
             );
