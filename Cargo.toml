@@ -1,0 +1,48 @@
+[package]
+name = "vibecast"
+version = "0.1.0"
+edition = "2021"
+description = "A beautiful terminal-based internet radio streaming app"
+authors = ["vibecast"]
+license = "MIT"
+
+[dependencies]
+# TUI Framework
+ratatui = "0.29"
+crossterm = "0.28"
+
+# Image Rendering
+ratatui-image = "4.0"
+image = "0.25"
+
+# Audio FFT Analysis
+spectrum-analyzer = "1.6"
+rustfft = "6.2"
+
+# HTTP Client & Async
+tokio = { version = "1", features = ["full", "sync", "io-util", "net", "process", "fs"] }
+reqwest = { version = "0.12", features = ["json"] }
+futures = "0.3"
+
+# JSON Parsing
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Configuration/Persistence
+directories = "5.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "2.0"
+
+# Color support
+colorsys = "0.6"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

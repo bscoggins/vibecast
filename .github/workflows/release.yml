@@ -1,0 +1,147 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Build job for all platforms
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: vibecast
+            asset_name: vibecast-linux-x86_64
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            artifact_name: vibecast
+            asset_name: vibecast-linux-aarch64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: vibecast
+            asset_name: vibecast-macos-x86_64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: vibecast
+            asset_name: vibecast-macos-aarch64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross-compilation tools (Linux ARM64)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Build release binary
+        run: |
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+          fi
+          cargo build --release --target ${{ matrix.target }}
+
+      - name: Prepare artifact
+        run: |
+          mkdir -p artifacts
+          cp target/${{ matrix.target }}/release/${{ matrix.artifact_name }} artifacts/${{ matrix.asset_name }}
+          chmod +x artifacts/${{ matrix.asset_name }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: artifacts/${{ matrix.asset_name }}
+
+  # Create release with all built binaries
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version from Cargo.toml
+        id: version
+        run: |
+          VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release
+          # Move and compress each binary
+          for dir in artifacts/*/; do
+            name=$(basename "$dir")
+            cp "$dir$name" "release/$name"
+            chmod +x "release/$name"
+            # Create tar.gz for each
+            cd release
+            tar -czvf "${name}.tar.gz" "$name"
+            rm "$name"
+            cd ..
+          done
+          ls -la release/
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          echo "## Vibecast v${{ steps.version.outputs.version }}" > release_notes.md
+          echo "" >> release_notes.md
+          echo "### Installation" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "1. Download the appropriate binary for your platform" >> release_notes.md
+          echo "2. Extract: \`tar -xzf vibecast-*.tar.gz\`" >> release_notes.md
+          echo "3. Make executable: \`chmod +x vibecast-*\`" >> release_notes.md
+          echo "4. Move to PATH: \`sudo mv vibecast-* /usr/local/bin/vibecast\`" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "### Requirements" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "- **mpv** must be installed for audio playback" >> release_notes.md
+          echo "  - macOS: \`brew install mpv\`" >> release_notes.md
+          echo "  - Linux: \`apt install mpv\` or \`pacman -S mpv\`" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "### Platforms" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "| File | Platform |" >> release_notes.md
+          echo "|------|----------|" >> release_notes.md
+          echo "| vibecast-macos-aarch64.tar.gz | macOS Apple Silicon (M1/M2/M3) |" >> release_notes.md
+          echo "| vibecast-macos-x86_64.tar.gz | macOS Intel |" >> release_notes.md
+          echo "| vibecast-linux-x86_64.tar.gz | Linux x86_64 |" >> release_notes.md
+          echo "| vibecast-linux-aarch64.tar.gz | Linux ARM64 |" >> release_notes.md
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Vibecast v${{ steps.version.outputs.version }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+          files: release/*.tar.gz
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
