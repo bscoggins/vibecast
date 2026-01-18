@@ -346,6 +346,8 @@ Releases are automated via GitHub Actions. To create a new release:
    [package]
    version = "0.2.0"  # Bump version number
    ```
+   Note: The release workflow derives the tag name from `Cargo.toml`. If the version
+   is not bumped, the workflow will try to create an existing tag and fail.
 
 2. Commit the version change:
    ```bash
