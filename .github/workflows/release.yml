@@ -30,6 +30,10 @@ jobs:
             target: aarch64-apple-darwin
             artifact_name: vibecast
             asset_name: vibecast-macos-aarch64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: vibecast.exe
+            asset_name: vibecast-windows-x86_64
 
     runs-on: ${{ matrix.os }}
 
@@ -48,24 +52,37 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu
 
-      - name: Build release binary
+      - name: Build release binary (Unix)
+        if: runner.os != 'Windows'
         run: |
           if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
             export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
           fi
           cargo build --release --target ${{ matrix.target }}
 
-      - name: Prepare artifact
+      - name: Build release binary (Windows)
+        if: runner.os == 'Windows'
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Prepare artifact (Unix)
+        if: runner.os != 'Windows'
         run: |
           mkdir -p artifacts
           cp target/${{ matrix.target }}/release/${{ matrix.artifact_name }} artifacts/${{ matrix.asset_name }}
           chmod +x artifacts/${{ matrix.asset_name }}
 
+      - name: Prepare artifact (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          mkdir artifacts
+          copy target\${{ matrix.target }}\release\${{ matrix.artifact_name }} artifacts\${{ matrix.asset_name }}.exe
+        shell: cmd
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset_name }}
-          path: artifacts/${{ matrix.asset_name }}
+          path: artifacts/${{ matrix.asset_name }}${{ runner.os == 'Windows' && '.exe' || '' }}
 
   # Create release with all built binaries
   release:
@@ -97,13 +114,27 @@ jobs:
           # Move and compress each binary
           for dir in artifacts/*/; do
             name=$(basename "$dir")
-            cp "$dir$name" "release/$name"
-            chmod +x "release/$name"
-            # Create tar.gz for each
-            cd release
-            tar -czvf "${name}.tar.gz" "$name"
-            rm "$name"
-            cd ..
+            # Find the binary file in the directory
+            binary=$(find "$dir" -type f | head -1)
+            if [ -n "$binary" ]; then
+              # Check if it's a Windows binary
+              if [[ "$name" == *"windows"* ]]; then
+                # Create zip for Windows
+                cp "$binary" "release/${name}.exe"
+                cd release
+                zip "${name}.zip" "${name}.exe"
+                rm "${name}.exe"
+                cd ..
+              else
+                # Create tar.gz for Unix
+                cp "$binary" "release/$name"
+                chmod +x "release/$name"
+                cd release
+                tar -czvf "${name}.tar.gz" "$name"
+                rm "$name"
+                cd ..
+              fi
+            fi
           done
           ls -la release/
 
@@ -114,16 +145,23 @@ jobs:
           echo "" >> release_notes.md
           echo "### Installation" >> release_notes.md
           echo "" >> release_notes.md
+          echo "#### macOS / Linux" >> release_notes.md
           echo "1. Download the appropriate binary for your platform" >> release_notes.md
           echo "2. Extract: \`tar -xzf vibecast-*.tar.gz\`" >> release_notes.md
           echo "3. Make executable: \`chmod +x vibecast-*\`" >> release_notes.md
           echo "4. Move to PATH: \`sudo mv vibecast-* /usr/local/bin/vibecast\`" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "#### Windows" >> release_notes.md
+          echo "1. Download \`vibecast-windows-x86_64.zip\`" >> release_notes.md
+          echo "2. Extract the zip file" >> release_notes.md
+          echo "3. Run \`vibecast-windows-x86_64.exe\` or add to PATH" >> release_notes.md
           echo "" >> release_notes.md
           echo "### Requirements" >> release_notes.md
           echo "" >> release_notes.md
           echo "- **mpv** must be installed for audio playback" >> release_notes.md
           echo "  - macOS: \`brew install mpv\`" >> release_notes.md
           echo "  - Linux: \`apt install mpv\` or \`pacman -S mpv\`" >> release_notes.md
+          echo "  - Windows: \`winget install mpv\` or \`choco install mpv\`" >> release_notes.md
           echo "" >> release_notes.md
           echo "### Platforms" >> release_notes.md
           echo "" >> release_notes.md
@@ -133,6 +171,7 @@ jobs:
           echo "| vibecast-macos-x86_64.tar.gz | macOS Intel |" >> release_notes.md
           echo "| vibecast-linux-x86_64.tar.gz | Linux x86_64 |" >> release_notes.md
           echo "| vibecast-linux-aarch64.tar.gz | Linux ARM64 |" >> release_notes.md
+          echo "| vibecast-windows-x86_64.zip | Windows x86_64 |" >> release_notes.md
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
@@ -142,7 +181,9 @@ jobs:
           body_path: release_notes.md
           draft: false
           prerelease: false
-          files: release/*.tar.gz
+          files: |
+            release/*.tar.gz
+            release/*.zip
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -47,8 +47,10 @@ A beautiful terminal-based internet radio streaming application for [SomaFM](htt
 - **mpv** media player (for audio playback)
   - macOS: `brew install mpv`
   - Linux: `apt install mpv` or `pacman -S mpv`
+  - Windows: `winget install mpv` or `choco install mpv`
 - **Terminal** with Unicode support
   - For best artwork quality: Kitty, iTerm2, WezTerm, or terminals with Sixel support
+  - Windows: Windows Terminal recommended for best experience
   - Basic support: Any terminal with Unicode (uses halfblock fallback)
 
 ## Installation
@@ -63,6 +65,9 @@ Download the latest release from the [Releases page](https://github.com/bscoggin
 | macOS Intel | `vibecast-macos-x86_64.tar.gz` |
 | Linux x86_64 | `vibecast-linux-x86_64.tar.gz` |
 | Linux ARM64 | `vibecast-linux-aarch64.tar.gz` |
+| Windows x86_64 | `vibecast-windows-x86_64.zip` |
+
+#### macOS / Linux
 
 ```bash
 # Download and extract (example for macOS Apple Silicon)
@@ -73,6 +78,19 @@ chmod +x vibecast-macos-aarch64
 sudo mv vibecast-macos-aarch64 /usr/local/bin/vibecast
 
 # Run
+vibecast
+```
+
+#### Windows
+
+```powershell
+# Download vibecast-windows-x86_64.zip and extract
+Expand-Archive vibecast-windows-x86_64.zip -DestinationPath .
+
+# Run directly
+.\vibecast-windows-x86_64.exe
+
+# Or add to PATH and run from anywhere
 vibecast
 ```
 
@@ -196,6 +214,7 @@ Use `>` and `<` to adjust quality. If currently playing, the stream will automat
 Settings are automatically saved to:
 - **macOS**: `~/Library/Application Support/com.vibecast.vibecast/config.json`
 - **Linux**: `~/.config/vibecast/config.json`
+- **Windows**: `%APPDATA%\vibecast\vibecast\config.json`
 
 Saved settings include:
 - Selected color theme
@@ -204,6 +223,7 @@ Saved settings include:
 Favorites are saved to:
 - **macOS**: `~/Library/Application Support/com.vibecast.vibecast/favorites.json`
 - **Linux**: `~/.config/vibecast/favorites.json`
+- **Windows**: `%APPDATA%\vibecast\vibecast\favorites.json`
 
 ## Project Structure
 
@@ -259,14 +279,20 @@ Vibecast uses the SomaFM public API:
 
 ### mpv Integration
 
-Audio playback is handled by mpv via JSON IPC over a Unix socket:
-- Socket path: `/tmp/vibecast_mpv_{pid}.sock` (unique per process to allow multiple instances)
+Audio playback is handled by mpv via JSON IPC:
+- **macOS/Linux**: Unix socket at `/tmp/vibecast_mpv_{pid}.sock`
+- **Windows**: Named pipe at `\\.\pipe\vibecast_mpv_{pid}`
+- Socket/pipe path is unique per process to allow multiple instances
 - Commands sent: `loadfile`, `set_property` (volume, pause), `get_property`
 - Audio stats (RMS/peak levels) are retrieved for visualization
 
 ### Platform Support
 
-Vibecast currently supports **macOS** and **Linux** only. Windows is not supported due to the use of Unix sockets for mpv IPC communication.
+Vibecast supports **macOS**, **Linux**, and **Windows** (10 and later).
+
+- macOS: Tested on Apple Silicon and Intel
+- Linux: x86_64 and ARM64
+- Windows: x86_64 (PowerShell, cmd.exe, Windows Terminal)
 
 ### Image Protocol Support
 
@@ -335,7 +361,7 @@ Releases are automated via GitHub Actions. To create a new release:
    ```
 
 The release workflow will automatically:
-- Build binaries for all supported platforms (Linux x86_64/aarch64, macOS x86_64/aarch64)
+- Build binaries for all supported platforms (Linux x86_64/aarch64, macOS x86_64/aarch64, Windows x86_64)
 - Create a GitHub release with the tag name
-- Upload compressed binaries as release assets
+- Upload compressed binaries as release assets (.tar.gz for Unix, .zip for Windows)
 - Generate release notes with installation instructions

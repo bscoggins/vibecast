@@ -21,7 +21,7 @@ rustfft = "6.2"
 
 # HTTP Client & Async
 tokio = { version = "1", features = ["full", "sync", "io-util", "net", "process", "fs"] }
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 futures = "0.3"
 
 # JSON Parsing
@@ -42,6 +42,10 @@ thiserror = "2.0"
 # Color support
 colorsys = "0.6"
 unicode-width = "0.1"
+
+# Windows-specific dependencies
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Foundation"] }
 
 [profile.release]
 lto = true

@@ -3,14 +3,24 @@
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
-use tokio::net::unix::{OwnedReadHalf, OwnedWriteHalf};
-use tokio::net::UnixStream;
 use tokio::process::{Child, Command};
 use tokio::time::{sleep, timeout, Duration};
+
+// Platform-specific imports
+#[cfg(unix)]
+use std::path::PathBuf;
+#[cfg(unix)]
+use tokio::net::unix::{OwnedReadHalf, OwnedWriteHalf};
+#[cfg(unix)]
+use tokio::net::UnixStream;
+
+#[cfg(windows)]
+use tokio::io::{ReadHalf, WriteHalf};
+#[cfg(windows)]
+use tokio::net::windows::named_pipe::{ClientOptions, NamedPipeClient};
 
 #[derive(Debug, Clone, Serialize)]
 struct MpvCommand {
@@ -51,22 +61,43 @@ impl Default for PlaybackState {
     }
 }
 
+// Platform-specific type aliases for reader/writer
+#[cfg(unix)]
+type IpcReader = BufReader<OwnedReadHalf>;
+#[cfg(unix)]
+type IpcWriter = BufWriter<OwnedWriteHalf>;
+
+#[cfg(windows)]
+type IpcReader = BufReader<ReadHalf<NamedPipeClient>>;
+#[cfg(windows)]
+type IpcWriter = BufWriter<WriteHalf<NamedPipeClient>>;
+
 pub struct MpvController {
+    #[cfg(unix)]
     socket_path: PathBuf,
+    #[cfg(windows)]
+    pipe_name: String,
     child: Option<Child>,
-    reader: Option<BufReader<OwnedReadHalf>>,
-    writer: Option<BufWriter<OwnedWriteHalf>>,
+    reader: Option<IpcReader>,
+    writer: Option<IpcWriter>,
     request_id: AtomicU64,
     pub state: PlaybackState,
 }
 
 impl MpvController {
     pub fn new() -> Self {
-        // Use process ID in socket name to allow multiple instances
+        #[cfg(unix)]
         let socket_path =
             std::env::temp_dir().join(format!("vibecast_mpv_{}.sock", std::process::id()));
+
+        #[cfg(windows)]
+        let pipe_name = format!(r"\\.\pipe\vibecast_mpv_{}", std::process::id());
+
         Self {
+            #[cfg(unix)]
             socket_path,
+            #[cfg(windows)]
+            pipe_name,
             child: None,
             reader: None,
             writer: None,
@@ -75,12 +106,28 @@ impl MpvController {
         }
     }
 
+    /// Returns the appropriate IPC server argument for mpv based on platform
+    fn ipc_server_arg(&self) -> String {
+        #[cfg(unix)]
+        {
+            format!("--input-ipc-server={}", self.socket_path.display())
+        }
+        #[cfg(windows)]
+        {
+            format!("--input-ipc-server={}", self.pipe_name)
+        }
+    }
+
     pub async fn play(&mut self, url: &str) -> Result<()> {
         // Stop any existing playback
         self.stop().await?;
 
-        // Remove old socket if exists
-        let _ = tokio::fs::remove_file(&self.socket_path).await;
+        // Platform-specific cleanup before starting
+        #[cfg(unix)]
+        {
+            let _ = tokio::fs::remove_file(&self.socket_path).await;
+        }
+        // Windows: Named pipes are automatically cleaned up when all handles are closed
 
         // Spawn mpv with the stream URL and audio stats filter for visualization
         let child = Command::new("mpv")
@@ -88,7 +135,7 @@ impl MpvController {
                 "--no-video",
                 "--no-terminal",
                 "--really-quiet",
-                &format!("--input-ipc-server={}", self.socket_path.display()),
+                &self.ipc_server_arg(),
                 &format!("--volume={}", self.state.volume),
                 // Audio stats filter for RMS/peak level monitoring
                 "--af=lavfi=[astats=metadata=1:reset=1:measure_perchannel=none]",
@@ -101,6 +148,27 @@ impl MpvController {
 
         self.child = Some(child);
 
+        // Platform-specific connection
+        #[cfg(unix)]
+        {
+            self.connect_unix().await?;
+        }
+        #[cfg(windows)]
+        {
+            self.connect_windows().await?;
+        }
+
+        // Give mpv a moment to start playing
+        sleep(Duration::from_millis(500)).await;
+
+        self.state.playing = true;
+        self.state.paused = false;
+
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    async fn connect_unix(&mut self) -> Result<()> {
         // Wait for socket to be available
         for _ in 0..50 {
             sleep(Duration::from_millis(100)).await;
@@ -129,11 +197,49 @@ impl MpvController {
         self.reader = Some(BufReader::new(read_half));
         self.writer = Some(BufWriter::new(write_half));
 
-        // Give mpv a moment to start playing
-        sleep(Duration::from_millis(500)).await;
+        Ok(())
+    }
 
-        self.state.playing = true;
-        self.state.paused = false;
+    #[cfg(windows)]
+    async fn connect_windows(&mut self) -> Result<()> {
+        use std::io::ErrorKind;
+        use windows_sys::Win32::Foundation::ERROR_PIPE_BUSY;
+
+        // Wait for pipe to be available with retry loop
+        let client = {
+            let mut attempts = 0;
+            loop {
+                match ClientOptions::new().open(&self.pipe_name) {
+                    Ok(client) => break client,
+                    Err(e) if e.raw_os_error() == Some(ERROR_PIPE_BUSY as i32) => {
+                        // Pipe exists but busy, wait and retry
+                        sleep(Duration::from_millis(100)).await;
+                    }
+                    Err(e) if e.kind() == ErrorKind::NotFound => {
+                        // Pipe doesn't exist yet, wait and retry
+                        sleep(Duration::from_millis(100)).await;
+                    }
+                    Err(e) => {
+                        self.stop().await?;
+                        return Err(e.into());
+                    }
+                }
+
+                attempts += 1;
+                if attempts >= 50 {
+                    if let Some(mut child) = self.child.take() {
+                        let _ = child.kill().await;
+                        let _ = child.wait().await;
+                    }
+                    return Err(anyhow!("mpv pipe not created"));
+                }
+            }
+        };
+
+        // Use tokio::io::split for NamedPipeClient (no into_split available)
+        let (read_half, write_half) = tokio::io::split(client);
+        self.reader = Some(BufReader::new(read_half));
+        self.writer = Some(BufWriter::new(write_half));
 
         Ok(())
     }
@@ -150,7 +256,14 @@ impl MpvController {
 
         self.state.playing = false;
         self.state.paused = false;
-        let _ = tokio::fs::remove_file(&self.socket_path).await;
+
+        // Platform-specific cleanup
+        #[cfg(unix)]
+        {
+            let _ = tokio::fs::remove_file(&self.socket_path).await;
+        }
+        // Windows: Named pipe cleaned up automatically when handles are closed
+
         Ok(())
     }
 
@@ -421,6 +534,12 @@ impl Drop for MpvController {
         if let Some(mut child) = self.child.take() {
             let _ = child.start_kill();
         }
-        let _ = std::fs::remove_file(&self.socket_path);
+
+        // Platform-specific cleanup
+        #[cfg(unix)]
+        {
+            let _ = std::fs::remove_file(&self.socket_path);
+        }
+        // Windows: Named pipe cleaned up automatically
     }
 }
