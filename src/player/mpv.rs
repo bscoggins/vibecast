@@ -250,8 +250,27 @@ impl MpvController {
         self.writer = None;
 
         if let Some(mut child) = self.child.take() {
-            let _ = child.kill().await;
-            let _ = child.wait().await;
+            // Platform-specific process termination
+            #[cfg(unix)]
+            {
+                let _ = child.kill().await;
+                let _ = child.wait().await;
+            }
+            #[cfg(windows)]
+            {
+                // On Windows, use taskkill to kill the entire process tree
+                // child.kill() only kills the direct process, not children
+                if let Some(pid) = child.id() {
+                    let _ = Command::new("taskkill")
+                        .args(["/F", "/T", "/PID", &pid.to_string()])
+                        .stdin(Stdio::null())
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .status()
+                        .await;
+                }
+                let _ = child.wait().await;
+            }
         }
 
         self.state.playing = false;
@@ -531,8 +550,24 @@ impl Default for MpvController {
 
 impl Drop for MpvController {
     fn drop(&mut self) {
-        if let Some(mut child) = self.child.take() {
-            let _ = child.start_kill();
+        if let Some(child) = self.child.take() {
+            #[cfg(unix)]
+            {
+                let mut child = child;
+                let _ = child.start_kill();
+            }
+            #[cfg(windows)]
+            {
+                // On Windows, use taskkill to kill the entire process tree
+                if let Some(pid) = child.id() {
+                    let _ = std::process::Command::new("taskkill")
+                        .args(["/F", "/T", "/PID", &pid.to_string()])
+                        .stdin(std::process::Stdio::null())
+                        .stdout(std::process::Stdio::null())
+                        .stderr(std::process::Stdio::null())
+                        .status();
+                }
+            }
         }
 
         // Platform-specific cleanup
