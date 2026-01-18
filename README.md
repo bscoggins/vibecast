@@ -47,17 +47,58 @@ A beautiful terminal-based internet radio streaming application for [SomaFM](htt
 - **mpv** media player (for audio playback)
   - macOS: `brew install mpv`
   - Linux: `apt install mpv` or `pacman -S mpv`
+  - Windows: `winget install mpv` or `choco install mpv`
 - **Terminal** with Unicode support
   - For best artwork quality: Kitty, iTerm2, WezTerm, or terminals with Sixel support
+  - Windows: Windows Terminal recommended for best experience
   - Basic support: Any terminal with Unicode (uses halfblock fallback)
 
 ## Installation
+
+### Pre-built Binaries
+
+Download the latest release from the [Releases page](https://github.com/bscoggins/vibecast/releases):
+
+| Platform | File |
+|----------|------|
+| macOS Apple Silicon (M1/M2/M3) | `vibecast-macos-aarch64.tar.gz` |
+| macOS Intel | `vibecast-macos-x86_64.tar.gz` |
+| Linux x86_64 | `vibecast-linux-x86_64.tar.gz` |
+| Linux ARM64 | `vibecast-linux-aarch64.tar.gz` |
+| Windows x86_64 | `vibecast-windows-x86_64.zip` |
+
+#### macOS / Linux
+
+```bash
+# Download and extract (example for macOS Apple Silicon)
+tar -xzf vibecast-macos-aarch64.tar.gz
+
+# Make executable and move to PATH
+chmod +x vibecast-macos-aarch64
+sudo mv vibecast-macos-aarch64 /usr/local/bin/vibecast
+
+# Run
+vibecast
+```
+
+#### Windows
+
+```powershell
+# Download vibecast-windows-x86_64.zip and extract
+Expand-Archive vibecast-windows-x86_64.zip -DestinationPath .
+
+# Run directly
+.\vibecast-windows-x86_64.exe
+
+# Or add to PATH and run from anywhere
+vibecast
+```
 
 ### From Source
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/vibecast.git
+git clone https://github.com/bscoggins/vibecast.git
 cd vibecast
 
 # Build release version
@@ -173,6 +214,7 @@ Use `>` and `<` to adjust quality. If currently playing, the stream will automat
 Settings are automatically saved to:
 - **macOS**: `~/Library/Application Support/com.vibecast.vibecast/config.json`
 - **Linux**: `~/.config/vibecast/config.json`
+- **Windows**: `%APPDATA%\vibecast\vibecast\config.json`
 
 Saved settings include:
 - Selected color theme
@@ -181,6 +223,7 @@ Saved settings include:
 Favorites are saved to:
 - **macOS**: `~/Library/Application Support/com.vibecast.vibecast/favorites.json`
 - **Linux**: `~/.config/vibecast/favorites.json`
+- **Windows**: `%APPDATA%\vibecast\vibecast\favorites.json`
 
 ## Project Structure
 
@@ -236,10 +279,20 @@ Vibecast uses the SomaFM public API:
 
 ### mpv Integration
 
-Audio playback is handled by mpv via JSON IPC over a Unix socket:
-- Socket path: `/tmp/vibecast_mpv.sock`
+Audio playback is handled by mpv via JSON IPC:
+- **macOS/Linux**: Unix socket at `/tmp/vibecast_mpv_{pid}.sock`
+- **Windows**: Named pipe at `\\.\pipe\vibecast_mpv_{pid}`
+- Socket/pipe path is unique per process to allow multiple instances
 - Commands sent: `loadfile`, `set_property` (volume, pause), `get_property`
 - Audio stats (RMS/peak levels) are retrieved for visualization
+
+### Platform Support
+
+Vibecast supports **macOS**, **Linux**, and **Windows** (10 and later).
+
+- macOS: Tested on Apple Silicon and Intel
+- Linux: x86_64 and ARM64
+- Windows: x86_64 (PowerShell, cmd.exe, Windows Terminal)
 
 ### Image Protocol Support
 
@@ -283,3 +336,34 @@ Contributions are welcome! Please feel free to submit issues and pull requests.
 3. Commit your changes (`git commit -m 'Add amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
+
+## Releasing
+
+Releases are automated via GitHub Actions. To create a new release:
+
+1. Update the version in `Cargo.toml`:
+   ```toml
+   [package]
+   version = "0.2.0"  # Bump version number
+   ```
+   Note: The release workflow derives the tag name from `Cargo.toml`. If the version
+   is not bumped, the workflow will try to create an existing tag and fail.
+
+2. Commit the version change:
+   ```bash
+   git add Cargo.toml Cargo.lock
+   git commit -m "Bump version to 0.2.0"
+   git push origin main
+   ```
+
+3. Create and push a version tag:
+   ```bash
+   git tag -a v0.2.0 -m "Release v0.2.0"
+   git push origin v0.2.0
+   ```
+
+The release workflow will automatically:
+- Build binaries for all supported platforms (Linux x86_64/aarch64, macOS x86_64/aarch64, Windows x86_64)
+- Create a GitHub release with the tag name
+- Upload compressed binaries as release assets (.tar.gz for Unix, .zip for Windows)
+- Generate release notes with installation instructions
